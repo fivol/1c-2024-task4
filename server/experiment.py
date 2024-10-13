@@ -16,6 +16,9 @@ class Client:
     host: str
     port: str
 
+    def __repr__(self):
+        return f'{self.host}:{self.port}'
+
 
 class HogwartsExperimentServer:
     def __init__(self, host: str, port: int, max_connections, db_file: str):
@@ -48,25 +51,25 @@ class HogwartsExperimentServer:
     @classmethod
     def _send_message(cls, client, message: str):
         client.send(message.encode())
-        assert "ACK" == cls._wait_client(client)
+        assert 'ACK' == cls._wait_client(client)
 
     @classmethod
     def _wait_client(cls, client):
         return client.recv(1024).decode()
 
     def _handle_client(self, client_socket, addr):
-        print(f"Новое подключение: {addr[0]}:{addr[1]}")
+        print(f'Новое подключение: {addr[0]}:{addr[1]}')
         cursor = self._db_conn.cursor()
 
-        addr_name = f"{addr[0]}:{addr[1]}"
-        cursor.execute("INSERT INTO participants (addr) VALUES (?)", (addr_name, ))
+        addr_name = f'{addr[0]}:{addr[1]}'
+        cursor.execute('INSERT INTO participants (addr) VALUES (?)', (addr_name, ))
         self._db_conn.commit()
-        cursor.execute("SELECT id FROM participants WHERE addr = ?", (addr_name,))
+        cursor.execute('SELECT id FROM participants WHERE addr = ?', (addr_name,))
         client_id = cursor.fetchone()[0]
 
         try:
             self._start_event.wait()
-            self._send_message(client_socket, "start")
+            self._send_message(client_socket, 'start')
             guessed = False
 
             while not guessed:
@@ -76,55 +79,60 @@ class HogwartsExperimentServer:
                         break
                     guess = int(guess)
 
-                    cursor.execute("INSERT INTO attempts (participant_id, value) VALUES (?, ?)", (client_id, guess))
+                    cursor.execute('INSERT INTO attempts (participant_id, value) VALUES (?, ?)', (client_id, guess))
                     self._db_conn.commit()
 
                     if guess < self._secret_number:
-                        response = "less"
+                        response = 'less'
                     elif guess > self._secret_number:
-                        response = "grater"
+                        response = 'grater'
                     else:
-                        response = "guessed"
+                        response = 'guessed'
                         guessed = True
 
                     self._send_message(client_socket, response)
 
                 except ValueError:
-                    self._send_message(client_socket, "value_error")
+                    self._send_message(client_socket, 'value_error')
                 except Exception as e:
-                    print(f"Ошибка с клиентом {addr}: {e}")
+                    logger.exception("Client error")
+                    print(f'Ошибка с клиентом {addr}: {e}')
                     break
+        except (AssertionError, KeyboardInterrupt):
+            logger.debug("Client disconnected")
+            pass
         finally:
-            print(f"Клиент {addr} отключился.")
+            print(f'Клиент {addr} отключился.')
+            self._clients = [item for item in self._clients if item.socket != client_socket]
             self._db_conn.commit()
             client_socket.close()
 
     def _handle_command(self, cmd: str):
-        if cmd.startswith("start"):
+        if cmd.startswith('start'):
             try:
-                self._secret_number = int(cmd.split(" ")[1])
+                self._secret_number = int(cmd.split(' ')[1])
                 self._start_event.set()
-                print("Эксперимент начался!")
-            except ValueError:
-                print("Введите целое число")
+                print('Эксперимент начался!')
+            except (IndexError, ValueError):
+                print('Введите целое число')
 
-        elif cmd == "list":
-            print("Адреса участников:")
-            print("\n".join(map(str, self._clients)) or "Участников пока нет")
+        elif cmd == 'list':
+            print('Адреса участников:')
+            print('\n'.join(map(str, self._clients)) or 'Участников пока нет')
 
-        elif cmd == "count":
-            print("Активных учстников:", len(self._clients))
+        elif cmd == 'count':
+            print('Активных учстников:', len(self._clients))
 
-        elif cmd == "exit":
+        elif cmd == 'exit':
             raise StopServer()
 
-        elif cmd == "help":
+        elif cmd == 'help':
             print(COMMANDS)
 
-        elif cmd == "table":
+        elif cmd == 'table':
             with self._db_conn:
                 cursor = self._db_conn.cursor()
-                cursor.execute("""
+                cursor.execute('''
                     WITH IDS AS (
                         SELECT participant_id, COUNT(*) - 1 AS best_attempts
                         FROM attempts
@@ -136,13 +144,13 @@ class HogwartsExperimentServer:
                     JOIN IDS ON IDS.participant_id = participants.id
                     ORDER BY best_attempts ASC
                     LIMIT 10
-                """)
+                ''')
 
                 for i, (id_, addr, best_attempts) in enumerate(cursor.fetchall()):
-                    print(f"{i + 1}. {addr} попыток: {best_attempts}")
+                    print(f'{i + 1}. {addr} попыток: {best_attempts}')
 
         else:
-            print("Неизвестная команда")
+            print('Неизвестная команда')
         print()
 
     def _user_input(self):
@@ -150,7 +158,7 @@ class HogwartsExperimentServer:
         print()
         try:
             while True:
-                cmd = input("Введите команду: ")
+                cmd = input('Введите команду: ')
                 self._handle_command(cmd)
         except EOFError:
             return
@@ -158,7 +166,7 @@ class HogwartsExperimentServer:
     def _init_server(self):
         self._server_socket.bind((self._host, self._port))
         self._server_socket.listen(self._max_connections)
-        print(f"Сервер запущен на {self._host}:{self._port}, ожидание подключений...")
+        print(f'Сервер запущен на {self._host}:{self._port}, ожидание подключений...')
 
     def _initialize(self):
         self._initialize_database()
@@ -174,7 +182,7 @@ class HogwartsExperimentServer:
                 client = Client(host=addr[0], port=addr[1], socket=client_socket, thread=client_thread)
                 self._clients.append(client)
         except (KeyboardInterrupt, StopServer, ConnectionAbortedError):
-            print("\nОстановка сервера...")
+            print('\nОстановка сервера...')
 
     def start_server(self):
         try:
@@ -188,8 +196,8 @@ class HogwartsExperimentServer:
             pass
 
         except Exception as e:  # noqa
-            print("Ошибка", e)
-            logger.exception("Server error")
+            print('Ошибка', e)
+            logger.exception('Server error')
 
         finally:
             self._finalize()
@@ -202,6 +210,6 @@ class HogwartsExperimentServer:
 
         self._db_conn.close()
         self._server_thread and self._server_thread.join()
-        print("Сервер остановлен.")
+        print('Сервер остановлен.')
 
 
