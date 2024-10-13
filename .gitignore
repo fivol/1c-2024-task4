@@ -1,0 +1,6 @@
+venv
+.venv
+*.pyc
+experiment.db
+*.log
+.idea
