@@ -62,7 +62,7 @@ class HogwartsExperimentServer:
         cursor = self._db_conn.cursor()
 
         addr_name = f'{addr[0]}:{addr[1]}'
-        cursor.execute('INSERT INTO participants (addr) VALUES (?)', (addr_name, ))
+        cursor.execute('INSERT INTO participants (addr) VALUES (?)', (addr_name,))
         self._db_conn.commit()
         cursor.execute('SELECT id FROM participants WHERE addr = ?', (addr_name,))
         client_id = cursor.fetchone()[0]
@@ -106,6 +106,16 @@ class HogwartsExperimentServer:
             self._clients = [item for item in self._clients if item.socket != client_socket]
             self._db_conn.commit()
             client_socket.close()
+
+    def _show_table(self, title: str, sql: str):
+        print(title)
+        with self._db_conn:
+            cursor = self._db_conn.cursor()
+            cursor.execute(sql)
+
+        for i, row in enumerate(cursor.fetchall()):
+            print(f'{i + 1}. {", ".join(map(str, row))}')
+        print()
 
     def _handle_command(self, cmd: str):
         if cmd.startswith('start'):
@@ -151,6 +161,11 @@ class HogwartsExperimentServer:
 
                 for i, (id_, addr, best_attempts) in enumerate(cursor.fetchall()):
                     print(f'{i + 1}. {addr} попыток: {best_attempts}')
+
+        elif cmd == 'participants':
+            self._show_table('Последние участники:',
+                             '''SELECT addr, ts FROM PARTICIPANTS ORDER BY ts DESC limit 10'''
+                             )
 
         else:
             print('Неизвестная команда')
@@ -214,5 +229,3 @@ class HogwartsExperimentServer:
         self._db_conn.close()
         self._server_thread and self._server_thread.join()
         print('Сервер остановлен.')
-
-
