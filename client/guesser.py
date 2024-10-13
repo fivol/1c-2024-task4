@@ -13,11 +13,16 @@ class NumberGuesser:
         self._guesses: list[int] = []
         self._client_socket = None
 
-    @staticmethod
-    def _input_value() -> int:
+    def _wait_value(self) -> int:
         while True:
-            message = input('Введите ваше предположение (число) или "exit" для выхода: ')
-            if message.lower() == 'exit':
+            message = input('Введите ваше предположение (число), "exit" для выхода или "list" для списка догадок: ')
+            message = message.lower()
+
+            if message == 'list':
+                print('Список догадок:', ', '.join(map(str, self._guesses)) or 'пуст')
+                continue
+
+            if message == 'exit':
                 raise StopClient()
             try:
                 return int(message)
@@ -43,7 +48,7 @@ class NumberGuesser:
             raise ServerError()
 
     def _guess_number(self) -> bool:
-        value = self._input_value()
+        value = self._wait_value()
         self._guesses.append(value)
         self._send_message(str(value))
         response = self._wait_message()

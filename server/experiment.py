@@ -109,6 +109,9 @@ class HogwartsExperimentServer:
 
     def _handle_command(self, cmd: str):
         if cmd.startswith('start'):
+            if self._start_event.is_set():
+                print('Эксперимент уже идет\n')
+                return
             try:
                 self._secret_number = int(cmd.split(' ')[1])
                 self._start_event.set()
